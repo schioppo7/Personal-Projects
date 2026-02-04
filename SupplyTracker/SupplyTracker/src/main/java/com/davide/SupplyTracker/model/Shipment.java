@@ -11,7 +11,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Shipment { // <--- CAMBIATO DA SupplyTracker A Shipment
+public class Shipment {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,7 +27,7 @@ public class Shipment { // <--- CAMBIATO DA SupplyTracker A Shipment
     private String recipient;
 
     @Enumerated(EnumType.STRING)
-    private ShipmentStatus status; // <--- USA ShipmentStatus (Vedi sotto)
+    private ShipmentStatus status;
 
     @PrePersist
     private void prePersist() {
@@ -35,7 +35,7 @@ public class Shipment { // <--- CAMBIATO DA SupplyTracker A Shipment
             this.trackingNumber = "CODE = " + UUID.randomUUID().toString().substring(0, 7).toUpperCase();
         }
         if (this.status == null) {
-            this.status = ShipmentStatus.CREATED; // <--- USA ShipmentStatus
+            this.status = ShipmentStatus.CREATED;
         }
     }
 
