@@ -24,3 +24,6 @@ ld -m elf_i386 -T linker.ld -o kernel/kernel.bin kernel/boot.o kernel/kernel.o
 
 # 4. Generate the ISO
 grub-mkrescue -o aurora.iso iso_root
+
+#5. Running the OS
+qemu-system-x86_64 -cdrom aurora.iso
