@@ -6,7 +6,6 @@
 
 int mode = 0; 
 int row = 0, col = 0;
-int mouse_x = 40, mouse_y = 12;
 uint8_t desktop_bg = 0x00; 
 uint8_t current_text_color = 0x0F;
 
@@ -30,11 +29,6 @@ void disable_cursor() {
 void put_char(char c, uint8_t color, int r, int cl) {
     volatile uint16_t* vga = (uint16_t*) VIDEO_MEMORY;
     vga[r * SCREEN_WIDTH + cl] = (uint16_t)c | (uint16_t)color << 8;
-}
-
-uint16_t get_char(int r, int cl) {
-    volatile uint16_t* vga = (uint16_t*) VIDEO_MEMORY;
-    return vga[r * SCREEN_WIDTH + cl];
 }
 
 void print(const char* str, uint8_t color, int* r, int* cl) {
@@ -75,6 +69,19 @@ void draw_clock() {
     put_char('0' + (sec & 0x0F), clock_color, tr, tc++);
 }
 
+void draw_loading_bar() {
+    int r = 12, c = 25;
+    print("Loading Aurora OS...", 0x0F, &r, &c);
+    r = 14; c = 25;
+    print("[", 0x0F, &r, &c);
+    for (int i = 0; i < 20; i++) {
+        wait(5);
+        print("=", 0x0A, &r, &c);
+    }
+    print("]", 0x0F, &r, &c);
+    wait(10);
+}
+
 void draw_calc() {
     int r = 10, c = 25;
     print(" +--- CALCULATOR ---+ ", 0x0B, &r, &c); r++; c = 25;
@@ -100,6 +107,16 @@ void draw_images() {
     print(" +--------------------+ ", 0x0D, &r, &c);
 }
 
+void draw_about() {
+    print("      ___      _   _ ____   ___  ____      _     ", 0x0B, &row, &col); row++; col = 0;
+    print("     / _ \\    | | | |  _ \\ / _ \\|  _ \\    / \\    ", 0x0B, &row, &col); row++; col = 0;
+    print("    | |_| |   | | | | |_) | | | | |_) |  / _ \\   ", 0x0B, &row, &col); row++; col = 0;
+    print("    |  _  |   | |_| |  _ <| |_| |  _ <  / ___ \\  ", 0x0B, &row, &col); row++; col = 0;
+    print("    |_| |_|    \\___/|_| \\_\\\\___/|_| \\_\\/_/   \\_\\ ", 0x0B, &row, &col); row++; col = 0;
+    row++;
+    print("    Aurora OS v1.8 - Developed by Davide", 0x0F, &row, &col);
+}
+
 void draw_desktop() {
     volatile uint16_t* vga = (uint16_t*) VIDEO_MEMORY;
     uint8_t bg_attr = (desktop_bg << 4) | 0x0F;
@@ -111,7 +128,7 @@ void draw_desktop() {
     put_char(240, 0x0E, 5, 25); tr = 6; tc = 24; print("8.Files", 0x0F, &tr, &tc);
     put_char(219, 0x0D, 5, 40); tr = 6; tc = 39; print("9.Images", 0x0F, &tr, &tc);
     for (int i = 0; i < SCREEN_WIDTH; i++) vga[(SCREEN_HEIGHT-1)*SCREEN_WIDTH + i] = (uint16_t)' ' | 0x7000;
-    tr = 24; tc = 2; print("[F1] Term | [789] Apps | [ARROWS] Mouse", 0x70, &tr, &tc);
+    tr = 24; tc = 2; print("[F1] Terminal | [7/8/9] Apps | [1-3] Colors", 0x70, &tr, &tc);
 }
 
 void show_terminal_welcome() {
@@ -124,42 +141,37 @@ void show_terminal_welcome() {
 
 void kernel_main(void) {
     disable_cursor(); 
+    draw_loading_bar();
     show_terminal_welcome();
     print("> ", 0x0F, &row, &col);
     char buffer[80]; int buf_idx = 0;
-    uint16_t under_mouse = (uint16_t)' ' | (desktop_bg << 12);
 
     while (1) {
-        if (mode >= 1) {
-            draw_clock();
-            put_char(under_mouse & 0xFF, (under_mouse >> 8) & 0xFF, mouse_y, mouse_x);
-            if (inb(0x64) & 1) {
-                uint8_t scancode = inb(0x60);
-                if (scancode == 0x3B) { mode = 0; show_terminal_welcome(); print("> ", 0x0F, &row, &col); continue; }
-                if (scancode == 0x48 && mouse_y > 1) mouse_y--;
-                if (scancode == 0x50 && mouse_y < 23) mouse_y++;
-                if (scancode == 0x4B && mouse_x > 0) mouse_x--;
-                if (scancode == 0x4D && mouse_x < 79) mouse_x++;
+        if (mode >= 1) draw_clock();
+        if (inb(0x64) & 1) {
+            uint8_t scancode = inb(0x60);
+            if (scancode == 0x3B) { mode = 0; show_terminal_welcome(); print("> ", 0x0F, &row, &col); continue; }
+            if (mode >= 1) {
                 if (scancode == 0x08) { draw_desktop(); mode = 2; draw_calc(); }
                 if (scancode == 0x09) { draw_desktop(); mode = 3; draw_files(); }
                 if (scancode == 0x0A) { draw_desktop(); mode = 4; draw_images(); }
-                under_mouse = get_char(mouse_y, mouse_x);
-                put_char('+', 0x0F, mouse_y, mouse_x);
-            }
-        } else {
-            if (inb(0x64) & 1) {
-                uint8_t scancode = inb(0x60);
+                if (scancode == 0x02) { desktop_bg = 0x0; draw_desktop(); if(mode > 1) { if(mode==2) draw_calc(); if(mode==3) draw_files(); if(mode==4) draw_images(); } }
+                if (scancode == 0x03) { desktop_bg = 0x1; draw_desktop(); if(mode > 1) { if(mode==2) draw_calc(); if(mode==3) draw_files(); if(mode==4) draw_images(); } }
+                if (scancode == 0x04) { desktop_bg = 0x4; draw_desktop(); if(mode > 1) { if(mode==2) draw_calc(); if(mode==3) draw_files(); if(mode==4) draw_images(); } }
+            } else {
                 if (!(scancode & 0x80)) {
                     char ascii[] = {0,27,'1','2','3','4','5','6','7','8','9','0','-','=','\b','\t','q','w','e','r','t','y','u','i','o','p','[',']','\n',0,'a','s','d','f','g','h','j','k','l',';','\'','`',0,'\\','z','x','c','v','b','n','m',',','.','/',0,'*',0,' '};
                     char c = (scancode < 128) ? ascii[scancode] : 0;
                     if (c == '\n') {
                         buffer[buf_idx] = '\0'; row++; col = 0;
                         if (strcmp(buffer, "help") == 0) print("Commands: about, clear, desktop, color, exit", 0x0F, &row, &col);
-                        else if (strcmp(buffer, "desktop") == 0) { mode = 1; draw_desktop(); under_mouse = get_char(mouse_y, mouse_x); }
+                        else if (strcmp(buffer, "color") == 0) print("Colors: yellow, green, cyan, red, white", 0x0E, &row, &col);
+                        else if (strcmp(buffer, "desktop") == 0) { mode = 1; draw_desktop(); }
+                        else if (strcmp(buffer, "about") == 0) draw_about();
                         else if (strcmp(buffer, "clear") == 0) show_terminal_welcome();
                         else if (strcmp(buffer, "exit") == 0) { print("System Halted.", 0x0C, &row, &col); asm volatile("hlt"); }
                         else if (buf_idx > 0) print("Unknown command.", 0x0C, &row, &col);
-                        buf_idx = 0; row++; col = 0; print("> ", 0x0F, &row, &col);
+                        buf_idx = 0; if (mode == 0) { row++; col = 0; print("> ", 0x0F, &row, &col); }
                     } else if (c == '\b' && buf_idx > 0) {
                         buf_idx--; col--; put_char(' ', current_text_color, row, col);
                     } else if (c > 0 && buf_idx < 79) {
